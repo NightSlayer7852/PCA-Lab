@@ -114,13 +114,17 @@ def get_stock_pca_positions(returns: pd.DataFrame, n_components: int = 2):
     sectors = [SECTOR_MAP.get(t, "Unknown") for t in tickers]
     colors = [SECTOR_COLORS.get(s, "#9CA3AF") for s in sectors]
 
-    result = pd.DataFrame({
+    result_dict = {
         "Ticker": tickers,
         "PC1": coords[:, 0],
         "PC2": coords[:, 1],
         "Sector": sectors,
         "Color": colors,
-    })
+    }
+    if n_components >= 3:
+        result_dict["PC3"] = coords[:, 2]
+
+    result = pd.DataFrame(result_dict)
 
     ev = pca.explained_variance_ratio_
     return result, ev, pca

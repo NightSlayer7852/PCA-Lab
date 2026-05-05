@@ -14,6 +14,7 @@ from pca_utils import (
     get_loadings,
     SECTOR_COLORS,
 )
+from ml_predictions import train_sector_model, train_stock_models
 
 # ── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -60,7 +61,7 @@ html, body, [class*="css"] {
 .main-subtitle {
     font-family: 'DM Mono', monospace;
     font-size: 0.78rem;
-    color: #888882;
+    color: #555550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-bottom: 2rem;
@@ -81,66 +82,69 @@ html, body, [class*="css"] {
 }
 .metric-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    color: #999994;
+    font-size: 0.72rem;
+    color: #555550;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-bottom: 0.35rem;
+    font-weight: 500;
 }
 .metric-value {
     font-family: 'DM Serif Display', serif;
     font-size: 1.9rem;
-    color: #111110;
+    color: #000000;
     line-height: 1;
 }
 .metric-unit {
     font-family: 'DM Sans', sans-serif;
     font-size: 0.78rem;
-    color: #888882;
+    color: #666660;
     margin-top: 0.2rem;
 }
 
 /* Section headings */
 .section-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    color: #AAAAAA;
+    font-size: 0.72rem;
+    color: #333330;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     margin-bottom: 0.6rem;
     margin-top: 0.2rem;
+    font-weight: 500;
 }
 
 /* Info box */
 .info-box {
-    background: #F3F3EF;
-    border-left: 3px solid #111110;
+    background: #F0F0EB;
+    border-left: 3px solid #2563EB;
     border-radius: 0 8px 8px 0;
     padding: 0.9rem 1.2rem;
     margin-bottom: 1.5rem;
-    font-size: 0.86rem;
-    color: #444440;
+    font-size: 0.88rem;
+    color: #555550;
     line-height: 1.6;
 }
 
 /* Sidebar section headers */
 .sidebar-section {
     font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    color: #BBBBBB;
+    font-size: 0.68rem;
+    color: #444440;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     margin-top: 1.4rem;
     margin-bottom: 0.5rem;
     padding-bottom: 0.4rem;
-    border-bottom: 1px solid #F0F0EC;
+    border-bottom: 1px solid #D8D8D4;
+    font-weight: 500;
 }
 
 /* Divider */
 .thin-divider {
-    height: 1px;
-    background: #E8E8E4;
-    margin: 1.8rem 0;
+    height: 2px;
+    background: linear-gradient(90deg, #D0D0CC, #E8E8E4, #D0D0CC);
+    margin: 2rem 0;
 }
 
 /* Tooltip / legend label */
@@ -175,10 +179,23 @@ html, body, [class*="css"] {
 [data-testid="stSlider"] > div { color: #111110; }
 
 /* Selectbox */
-[data-testid="stSelectbox"] label { font-size: 0.82rem; color: #555550; }
+[data-testid="stSelectbox"] label { font-size: 0.84rem; color: #333330; }
 
 /* Checkbox */
-[data-testid="stCheckbox"] label { font-size: 0.82rem; color: #555550; }
+[data-testid="stCheckbox"] label { font-size: 0.84rem; color: #333330; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #333330;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px 8px 0 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -203,9 +220,9 @@ with st.sidebar:
             help="Download from: kaggle.com/datasets/camnugent/sandp500"
         )
         st.markdown(
-            '<div style="font-size:0.72rem; color:#AAAAAA; margin-top:0.5rem;">'
+            '<div style="font-size:0.74rem; color:#555550; margin-top:0.5rem;">'
             '🔗 <a href="https://www.kaggle.com/datasets/camnugent/sandp500" target="_blank" '
-            'style="color:#555550;">Download dataset from Kaggle</a></div>',
+            'style="color:#2563EB;">Download dataset from Kaggle</a></div>',
             unsafe_allow_html=True
         )
 
@@ -222,14 +239,13 @@ with st.sidebar:
 
     st.markdown('<div class="sidebar-section">Display</div>', unsafe_allow_html=True)
     show_labels = st.checkbox("Show ticker labels on chart", value=True)
+    show_3d = st.toggle("Show 3D PCA Graph", value=False)
     selected_sectors = st.multiselect(
         "Filter by sector",
         options=list(SECTOR_COLORS.keys()),
         default=[],
         placeholder="All sectors"
     )
-
-
 
 # ── Sample data generator ────────────────────────────────────────────────────
 @st.cache_data
@@ -358,7 +374,7 @@ with st.sidebar:
     
     auto_excluded = top_10_drivers[:exclude_top_n]
     if auto_excluded:
-        st.markdown(f"<div style='font-size:0.75rem; color:#888; margin-top:-10px; margin-bottom:10px;'><b>Excluding:</b> {', '.join(auto_excluded)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.75rem; color:#333330; margin-top:-10px; margin-bottom:10px;'><b>Excluding:</b> {', '.join(auto_excluded)}</div>", unsafe_allow_html=True)
         
     manual_exclude = st.multiselect(
         "Manually exclude stocks", 
@@ -369,7 +385,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown(
-        '<div style="font-size:0.68rem; color:#CCCCCC; line-height:1.6;">'
+        '<div style="font-size:0.72rem; color:#666660; line-height:1.6;">'
         'Paper: Ghorbani & Chong (2020)<br>'
         'PLOS ONE · PCA for Stock Prediction<br><br>'
         'Dataset: S&P 500 · Cam Nugent · Kaggle'
@@ -387,7 +403,7 @@ if returns.shape[1] < 3:
 
 with st.spinner("Running PCA…"):
     try:
-        stock_pca, ev_ratio, pca_obj = get_stock_pca_positions(returns, n_components=2)
+        stock_pca, ev_ratio, pca_obj = get_stock_pca_positions(returns, n_components=3 if show_3d else 2)
     except Exception as e:
         st.error(f"⚠️ Error running PCA: {e}")
         st.stop()
@@ -402,9 +418,14 @@ n_stocks = len(plot_df)
 n_days = len(returns)
 pc1_var = round(ev_ratio[0] * 100, 1)
 pc2_var = round(ev_ratio[1] * 100, 1)
-total_var = round((ev_ratio[0] + ev_ratio[1]) * 100, 1)
 
-st.markdown(f"""
+if show_3d:
+    pc3_var = round(ev_ratio[2] * 100, 1)
+    total_var = round((ev_ratio[0] + ev_ratio[1] + ev_ratio[2]) * 100, 1)
+else:
+    total_var = round((ev_ratio[0] + ev_ratio[1]) * 100, 1)
+
+metric_html = f"""
 <div class="metric-row">
   <div class="metric-card">
     <div class="metric-label">Stocks Analysed</div>
@@ -417,26 +438,42 @@ st.markdown(f"""
     <div class="metric-unit">{str(start_date)} → {str(end_date)}</div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">PC1 Variance Explained</div>
+    <div class="metric-label">PC1 Variance</div>
     <div class="metric-value">{pc1_var}%</div>
     <div class="metric-unit">First principal component</div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">PC2 Variance Explained</div>
+    <div class="metric-label">PC2 Variance</div>
     <div class="metric-value">{pc2_var}%</div>
     <div class="metric-unit">Second principal component</div>
   </div>
+"""
+
+if show_3d:
+    metric_html += f"""
+  <div class="metric-card">
+    <div class="metric-label">PC3 Variance</div>
+    <div class="metric-value">{pc3_var}%</div>
+    <div class="metric-unit">Third principal component</div>
+  </div>
+"""
+
+metric_html += f"""
   <div class="metric-card">
     <div class="metric-label">Total Captured</div>
     <div class="metric-value">{total_var}%</div>
-    <div class="metric-unit">PC1 + PC2 combined</div>
+    <div class="metric-unit">Combined</div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+st.markdown(metric_html, unsafe_allow_html=True)
 
 
-# ── 2D PCA Scatter Plot ───────────────────────────────────────────────────────
-st.markdown('<div class="section-label">2D PCA Scatter — Each dot is one stock</div>', unsafe_allow_html=True)
+# ── 2D/3D PCA Scatter Plot ───────────────────────────────────────────────────────
+if show_3d:
+    st.markdown('<div class="section-label">3D PCA Scatter — Each dot is one stock</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="section-label">2D PCA Scatter — Each dot is one stock</div>', unsafe_allow_html=True)
 
 fig = go.Figure()
 
@@ -446,71 +483,214 @@ from pca_utils import SECTOR_COLORS
 for sector in sorted(sectors_present):
     sdf = plot_df[plot_df["Sector"] == sector]
     color = SECTOR_COLORS.get(sector, "#9CA3AF")
-    fig.add_trace(go.Scatter(
-        x=sdf["PC1"],
-        y=sdf["PC2"],
-        mode="markers+text" if show_labels else "markers",
-        name=sector,
-        text=sdf["Ticker"] if show_labels else None,
-        textposition="top center",
-        textfont=dict(family="DM Mono, monospace", size=9, color="#444440"),
-        marker=dict(
-            color=color,
-            size=11,
-            opacity=0.82,
-            line=dict(width=1.2, color="white"),
-            symbol="circle",
-        ),
-        hovertemplate=(
-            "<b>%{text}</b><br>"
-            "Sector: " + sector + "<br>"
-            "PC1: %{x:.3f}<br>"
-            "PC2: %{y:.3f}<br>"
-            "<extra></extra>"
-        ),
-        customdata=sdf["Ticker"],
-    ))
+    if show_3d:
+        fig.add_trace(go.Scatter3d(
+            x=sdf["PC1"],
+            y=sdf["PC2"],
+            z=sdf["PC3"],
+            mode="markers+text" if show_labels else "markers",
+            name=sector,
+            text=sdf["Ticker"] if show_labels else None,
+            textposition="top center",
+            textfont=dict(family="DM Mono, monospace", size=9, color="#222220"),
+            marker=dict(
+                color=color,
+                size=5,
+                opacity=0.82,
+                line=dict(width=1, color="white"),
+                symbol="circle",
+            ),
+            hovertemplate=(
+                "<b>%{text}</b><br>"
+                "Sector: " + sector + "<br>"
+                "PC1: %{x:.3f}<br>"
+                "PC2: %{y:.3f}<br>"
+                "PC3: %{z:.3f}<br>"
+                "<extra></extra>"
+            ),
+            customdata=sdf["Ticker"],
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=sdf["PC1"],
+            y=sdf["PC2"],
+            mode="markers+text" if show_labels else "markers",
+            name=sector,
+            text=sdf["Ticker"] if show_labels else None,
+            textposition="top center",
+            textfont=dict(family="DM Mono, monospace", size=9, color="#555550"),
+            marker=dict(
+                color=color,
+                size=11,
+                opacity=0.82,
+                line=dict(width=1.2, color="white"),
+                symbol="circle",
+            ),
+            hovertemplate=(
+                "<b>%{text}</b><br>"
+                "Sector: " + sector + "<br>"
+                "PC1: %{x:.3f}<br>"
+                "PC2: %{y:.3f}<br>"
+                "<extra></extra>"
+            ),
+            customdata=sdf["Ticker"],
+        ))
 
-# Zero lines
-fig.add_hline(y=0, line_width=1, line_dash="dot", line_color="#DDDDDD")
-fig.add_vline(x=0, line_width=1, line_dash="dot", line_color="#DDDDDD")
+if show_3d:
+    pc3_var = round(ev_ratio[2] * 100, 1)
+    fig.update_layout(
+        scene=dict(
+            xaxis_title=f"PC1  ({pc1_var}% var)",
+            yaxis_title=f"PC2  ({pc2_var}% var)",
+            zaxis_title=f"PC3  ({pc3_var}% var)",
+            xaxis=dict(showgrid=True, gridcolor="#F0F0EC", zeroline=False, title_font=dict(color="#222220"), tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+            yaxis=dict(showgrid=True, gridcolor="#F0F0EC", zeroline=False, title_font=dict(color="#222220"), tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+            zaxis=dict(showgrid=True, gridcolor="#F0F0EC", zeroline=False, title_font=dict(color="#222220"), tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+        ),
+        font=dict(family="DM Sans, sans-serif", size=12, color="#222220"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FFFFFF",
+        legend=dict(
+            title=dict(text="Sector", font=dict(family="DM Mono, monospace", size=10, color="#222220")),
+            font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="#E8E8E4",
+            borderwidth=1,
+            x=1.01, y=1,
+        ),
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=600,
+        hoverlabel=dict(
+            bgcolor="white",
+            bordercolor="#E8E8E4",
+            font=dict(family="DM Mono, monospace", size=11, color="#111110"),
+        ),
+    )
+else:
+    # Zero lines
+    fig.add_hline(y=0, line_width=1, line_dash="dot", line_color="#DDDDDD")
+    fig.add_vline(x=0, line_width=1, line_dash="dot", line_color="#DDDDDD")
 
-fig.update_layout(
-    xaxis_title=f"PC1  ({pc1_var}% variance explained)",
-    yaxis_title=f"PC2  ({pc2_var}% variance explained)",
-    font=dict(family="DM Sans, sans-serif", size=12, color="#333330"),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="#FFFFFF",
-    legend=dict(
-        title=dict(text="Sector", font=dict(family="DM Mono, monospace", size=10)),
-        font=dict(family="DM Sans, sans-serif", size=11),
-        bgcolor="rgba(255,255,255,0.9)",
-        bordercolor="#E8E8E4",
-        borderwidth=1,
-        x=1.01, y=1,
-    ),
-    xaxis=dict(
-        showgrid=True, gridcolor="#F0F0EC", gridwidth=1,
-        zeroline=False,
-        tickfont=dict(family="DM Mono, monospace", size=10),
-        title_font=dict(family="DM Sans, sans-serif", size=12, color="#666660"),
-    ),
-    yaxis=dict(
-        showgrid=True, gridcolor="#F0F0EC", gridwidth=1,
-        zeroline=False,
-        tickfont=dict(family="DM Mono, monospace", size=10),
-        title_font=dict(family="DM Sans, sans-serif", size=12, color="#666660"),
-    ),
-    margin=dict(l=60, r=180, t=30, b=60),
-    height=560,
-    hoverlabel=dict(
-        bgcolor="white",
-        bordercolor="#E8E8E4",
-        font=dict(family="DM Mono, monospace", size=11),
-    ),
-)
+    fig.update_layout(
+        xaxis_title=f"PC1  ({pc1_var}% variance explained)",
+        yaxis_title=f"PC2  ({pc2_var}% variance explained)",
+        font=dict(family="DM Sans, sans-serif", size=12, color="#222220"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FFFFFF",
+        legend=dict(
+            title=dict(text="Sector", font=dict(family="DM Mono, monospace", size=10, color="#222220")),
+            font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="#E8E8E4",
+            borderwidth=1,
+            x=1.01, y=1,
+        ),
+        xaxis=dict(
+            showgrid=True, gridcolor="#F0F0EC", gridwidth=1,
+            zeroline=False,
+            tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"),
+            title_font=dict(family="DM Sans, sans-serif", size=12, color="#222220"),
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor="#F0F0EC", gridwidth=1,
+            zeroline=False,
+            tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"),
+            title_font=dict(family="DM Sans, sans-serif", size=12, color="#222220"),
+        ),
+        margin=dict(l=60, r=180, t=30, b=60),
+        height=560,
+        hoverlabel=dict(
+            bgcolor="white",
+            bordercolor="#E8E8E4",
+            font=dict(family="DM Mono, monospace", size=11, color="#111110"),
+        ),
+    )
 
 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+# ── Market Factor Analysis (Time Series Overlay) ──────────────────────────────
+st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">The "Market Factor" (PC1) vs Individual Stocks</div>', unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="info-box" style="margin-bottom:1rem;">'
+    '<b>Why this matters:</b> In finance, the First Principal Component (PC1) almost always captures the '
+    'general "Market Trend". If we plot PC1\'s daily movements cumulatively, it looks just like a broad market index. '
+    'Select a stock below to see how closely it follows the hidden "Market Factor" (PC1).'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+overlay_col1, overlay_col2 = st.columns([1, 3])
+with overlay_col1:
+    compare_ticker = st.selectbox(
+        "Select Stock to Compare", 
+        options=returns.columns.tolist(),
+        index=returns.columns.tolist().index("AAPL") if "AAPL" in returns.columns else 0
+    )
+
+with overlay_col2:
+    # Get PC1 scores over time
+    from sklearn.decomposition import PCA as _PCA_ts
+    from sklearn.preprocessing import StandardScaler as _SS_ts
+    
+    _Xr_ts = _SS_ts().fit_transform(returns.values)
+    _pca_ts = _PCA_ts(n_components=1).fit(_Xr_ts)
+    pc1_daily = _pca_ts.transform(_Xr_ts)[:, 0]
+    
+    # Check correlation to make sure PC1 isn't flipped (PCA sign is arbitrary)
+    market_avg = returns.mean(axis=1).values
+    if np.corrcoef(pc1_daily, market_avg)[0, 1] < 0:
+        pc1_daily = -pc1_daily
+        
+    stock_cum = (1 + returns[compare_ticker]).cumprod().values - 1
+    stock_scaled = (stock_cum - stock_cum.mean()) / (stock_cum.std() + 1e-9)
+    
+    pc1_cum = pc1_daily.cumsum()
+    pc1_scaled = (pc1_cum - pc1_cum.mean()) / (pc1_cum.std() + 1e-9)
+    
+    ts_df = pd.DataFrame({
+        "Date": returns.index,
+        compare_ticker: stock_scaled,
+        "PC1 (Market Factor)": pc1_scaled
+    })
+    
+    ts_fig = go.Figure()
+    ts_fig.add_trace(go.Scatter(
+        x=ts_df["Date"], y=ts_df["PC1 (Market Factor)"],
+        mode="lines",
+        name="PC1 (Market Factor)",
+        line=dict(color="#111110", width=3)
+    ))
+    
+    sec = stock_pca[stock_pca["Ticker"] == compare_ticker]["Sector"].values
+    color = SECTOR_COLORS.get(sec[0], "#2563EB") if len(sec) > 0 else "#2563EB"
+    
+    ts_fig.add_trace(go.Scatter(
+        x=ts_df["Date"], y=ts_df[compare_ticker],
+        mode="lines",
+        name=f"{compare_ticker} (Normalized)",
+        line=dict(color=color, width=2, dash="dot")
+    ))
+    
+    ts_fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FFFFFF",
+        hovermode="x unified",
+        xaxis=dict(showgrid=False, tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+        yaxis=dict(showgrid=True, gridcolor="#F0F0EC", zeroline=True, zerolinecolor="#DDDDDD", 
+                   tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"), title="Normalized Path", title_font=dict(color="#222220")),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+            font=dict(family="DM Sans, sans-serif", size=11, color="#222220")
+        ),
+        margin=dict(l=40, r=20, t=40, b=10),
+        height=320,
+        font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
+        hoverlabel=dict(bgcolor="white", bordercolor="#E8E8E4",
+                        font=dict(family="DM Mono, monospace", size=11, color="#111110"))
+    )
+    st.plotly_chart(ts_fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── Divider ────────────────────────────────────────────────────────────────────
@@ -554,17 +734,17 @@ with col_a:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#FFFFFF",
         showlegend=False,
-        xaxis=dict(tickfont=dict(family="DM Mono, monospace", size=10), showgrid=False),
-        yaxis=dict(title="% Variance", tickfont=dict(family="DM Mono, monospace", size=10),
+        xaxis=dict(tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"), showgrid=False),
+        yaxis=dict(title="% Variance", title_font=dict(color="#222220"), tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"),
                    showgrid=True, gridcolor="#F0F0EC"),
-        yaxis2=dict(title="Cumulative %", overlaying="y", side="right",
-                    tickfont=dict(family="DM Mono, monospace", size=10),
+        yaxis2=dict(title="Cumulative %", title_font=dict(color="#222220"), overlaying="y", side="right",
+                    tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"),
                     showgrid=False, range=[0, 105]),
         margin=dict(l=50, r=60, t=20, b=40),
         height=300,
-        font=dict(family="DM Sans, sans-serif", size=11),
+        font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
         hoverlabel=dict(bgcolor="white", bordercolor="#E8E8E4",
-                        font=dict(family="DM Mono, monospace", size=11)),
+                        font=dict(family="DM Mono, monospace", size=11, color="#111110")),
     )
     st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -608,15 +788,15 @@ with col_b:
         barmode="group",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#FFFFFF",
-        legend=dict(font=dict(family="DM Mono, monospace", size=10)),
-        xaxis=dict(tickfont=dict(family="DM Mono, monospace", size=10), showgrid=False),
-        yaxis=dict(title="Loading", tickfont=dict(family="DM Mono, monospace", size=10),
+        legend=dict(font=dict(family="DM Mono, monospace", size=10, color="#222220")),
+        xaxis=dict(tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"), showgrid=False),
+        yaxis=dict(title="Loading", tickfont=dict(family="DM Mono, monospace", size=10, color="#222220"),
                    showgrid=True, gridcolor="#F0F0EC"),
         margin=dict(l=50, r=20, t=20, b=40),
         height=300,
-        font=dict(family="DM Sans, sans-serif", size=11),
+        font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
         hoverlabel=dict(bgcolor="white", bordercolor="#E8E8E4",
-                        font=dict(family="DM Mono, monospace", size=11)),
+                        font=dict(family="DM Mono, monospace", size=11, color="#111110")),
     )
     st.plotly_chart(load_fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -624,26 +804,152 @@ with col_b:
 # ── Divider ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
 
+# ── ML Predictions ────────────────────────────────────────────────────────────
+# st.markdown('<div class="section-label">🔮 Predictive Analytics (Machine Learning)</div>', unsafe_allow_html=True)
+# st.markdown(
+#     '<div class="info-box">'
+#     '<b>Machine Learning Models:</b> We use Random Forest and Logistic Regression on top of PCA features '
+#     'to predict the future movement, volatility, and sector of the stocks.'
+#     '</div>',
+#     unsafe_allow_html=True
+# )
+
+# pred_col1, pred_col2, pred_col3 = st.columns(3)
+
+# with pred_col1:
+#     st.markdown("**1. Select Stock for Prediction**")
+#     pred_ticker = st.selectbox("Ticker", options=returns.columns.tolist(), index=0, key="pred_ticker")
+
+# # Train models on the fly
+# with st.spinner("Training ML Models..."):
+#     sector_res = train_sector_model(stock_pca)
+#     clf_sector = sector_res[0] if sector_res else None
+#     acc_sector = sector_res[1] if sector_res else 0.0
+    
+#     movement_res, vol_res = train_stock_models(returns, pred_ticker)
+
+# with pred_col2:
+#     st.markdown("**2. Next-Day Movement & Volatility**")
+#     if movement_res:
+#         st.markdown(f"**Movement:** {movement_res['prediction']} *(Confidence: {movement_res['probability']:.1%})*")
+#         st.markdown(f"**Model Accuracy:** {movement_res['accuracy']:.1%}")
+#     else:
+#         st.write("Not enough data.")
+        
+#     if vol_res:
+#         st.markdown(f"**Predicted 5-Day Volatility:** {vol_res['prediction']:.4f}")
+#         st.markdown(f"**Current 5-Day Volatility:** {vol_res['baseline']:.4f}")
+
+# with pred_col3:
+#     st.markdown("**3. Auto-Sector Classification**")
+#     if clf_sector:
+#         # Get PC features for this stock
+#         pc_cols = [c for c in stock_pca.columns if c.startswith("PC")]
+#         stock_feats = stock_pca[stock_pca["Ticker"] == pred_ticker][pc_cols]
+#         if not stock_feats.empty:
+#             pred_sector = clf_sector.predict(stock_feats)[0]
+#             actual_sector = stock_pca[stock_pca["Ticker"] == pred_ticker]["Sector"].values[0]
+            
+#             icon = "✅" if pred_sector == actual_sector else "❌"
+#             st.markdown(f"**Predicted:** {pred_sector} {icon}")
+#             st.markdown(f"**Actual:** {actual_sector}")
+#             st.markdown(f"**Model Accuracy:** {acc_sector:.1%}")
+#     else:
+#         st.write("Not enough data.")
+
+# st.markdown("<br>", unsafe_allow_html=True)
+# st.markdown('<div class="section-label">Model Insights & Plots</div>', unsafe_allow_html=True)
+# ml_col1, ml_col2 = st.columns(2)
+
+# with ml_col1:
+#     if movement_res:
+#         # Movement Feature Importance (Logistic Regression Coefficients)
+#         coef_df = pd.DataFrame({
+#             "Feature": movement_res["feature_names"],
+#             "Impact": movement_res["coefficients"]
+#         }).sort_values("Impact", key=abs, ascending=True)
+        
+#         coef_fig = go.Figure(go.Bar(
+#             x=coef_df["Impact"],
+#             y=coef_df["Feature"],
+#             orientation='h',
+#             marker_color=["#16A34A" if val > 0 else "#DC2626" for val in coef_df["Impact"]]
+#         ))
+#         coef_fig.update_layout(
+#             title="What drives next-day movement?",
+#             title_font=dict(family="DM Serif Display", size=16, color="#111110"),
+#             paper_bgcolor="rgba(0,0,0,0)",
+#             plot_bgcolor="#FFFFFF",
+#             margin=dict(l=10, r=10, t=40, b=10),
+#             height=250,
+#             xaxis=dict(showgrid=True, gridcolor="#F0F0EC", zeroline=True, zerolinecolor="#111110", tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+#             yaxis=dict(showgrid=False, tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+#             font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
+#             hoverlabel=dict(bgcolor="white", bordercolor="#E8E8E4", font=dict(family="DM Mono, monospace", size=11, color="#111110")),
+#         )
+#         st.plotly_chart(coef_fig, use_container_width=True, config={"displayModeBar": False})
+
+# with ml_col2:
+#     if vol_res:
+#         # Actual vs Predicted Volatility Time Series
+#         vol_fig = go.Figure()
+#         vol_fig.add_trace(go.Scatter(
+#             x=vol_res["test_dates"], y=vol_res["test_actual"],
+#             mode="lines", name="Actual 5d Vol", line=dict(color="#111110", width=2)
+#         ))
+#         vol_fig.add_trace(go.Scatter(
+#             x=vol_res["test_dates"], y=vol_res["test_pred"],
+#             mode="lines", name="Predicted Vol", line=dict(color="#2563EB", width=2, dash="dot")
+#         ))
+#         vol_fig.update_layout(
+#             title="Volatility Forecast Accuracy (Test Set)",
+#             title_font=dict(family="DM Serif Display", size=16, color="#111110"),
+#             paper_bgcolor="rgba(0,0,0,0)",
+#             plot_bgcolor="#FFFFFF",
+#             hovermode="x unified",
+#             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(family="DM Sans, sans-serif", size=11, color="#222220")),
+#             margin=dict(l=10, r=10, t=40, b=10),
+#             height=250,
+#             xaxis=dict(showgrid=False, tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+#             yaxis=dict(showgrid=True, gridcolor="#F0F0EC", tickfont=dict(family="DM Mono, monospace", size=10, color="#222220")),
+#             font=dict(family="DM Sans, sans-serif", size=11, color="#222220"),
+#             hoverlabel=dict(bgcolor="white", bordercolor="#E8E8E4", font=dict(family="DM Mono, monospace", size=11, color="#111110")),
+#         )
+#         st.plotly_chart(vol_fig, use_container_width=True, config={"displayModeBar": False})
+
+# st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
+
 # ── Stock Data Table ───────────────────────────────────────────────────────────
 st.markdown('<div class="section-label">Stock PCA Coordinates</div>', unsafe_allow_html=True)
 
-table_df = stock_pca[["Ticker", "Sector", "PC1", "PC2"]].copy()
+table_cols = ["Ticker", "Sector", "PC1", "PC2"]
+if show_3d:
+    table_cols.append("PC3")
+
+table_df = stock_pca[table_cols].copy()
 table_df["PC1"] = table_df["PC1"].round(4)
 table_df["PC2"] = table_df["PC2"].round(4)
+if show_3d:
+    table_df["PC3"] = table_df["PC3"].round(4)
+
 if selected_sectors:
     table_df = table_df[table_df["Sector"].isin(selected_sectors)]
 table_df = table_df.sort_values("PC1").reset_index(drop=True)
+
+column_config={
+    "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+    "Sector": st.column_config.TextColumn("Sector", width="medium"),
+    "PC1": st.column_config.NumberColumn("PC1 Score", format="%.4f"),
+    "PC2": st.column_config.NumberColumn("PC2 Score", format="%.4f"),
+}
+if show_3d:
+    column_config["PC3"] = st.column_config.NumberColumn("PC3 Score", format="%.4f")
 
 st.dataframe(
     table_df,
     use_container_width=True,
     height=260,
-    column_config={
-        "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-        "Sector": st.column_config.TextColumn("Sector", width="medium"),
-        "PC1": st.column_config.NumberColumn("PC1 Score", format="%.4f"),
-        "PC2": st.column_config.NumberColumn("PC2 Score", format="%.4f"),
-    },
+    column_config=column_config,
     hide_index=True,
 )
 
@@ -655,3 +961,40 @@ st.download_button(
     file_name="pca_stock_results.csv",
     mime="text/csv",
 )
+
+# ── Extra Visualizations ────────────────────────────────────────────────────────
+st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Additional Analysis Visualizations</div>', unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="info-box">'
+    '<b>Explore further:</b> Click the tabs below to view different perspectives on the PCA results — '
+    'from sector-level aggregations to pairwise scatter matrices and return correlations.'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+from plots import create_bar_graph, create_histogram, create_pairplot, create_heatmap
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Sector Bar Graph",
+    "PC1 Distribution",
+    "PC Pairplot",
+    "Correlation Heatmap"
+])
+
+with tab1:
+    st.markdown("**Mean PC1 score per sector** — sectors loading higher on PC1 are more sensitive to the overall market direction. Error bars show within-sector spread.")
+    st.plotly_chart(create_bar_graph(stock_pca), use_container_width=True)
+
+with tab2:
+    st.markdown("**How are PC1 scores distributed?** — overlapping histograms reveal whether sectors separate cleanly on the market factor. Box marginals show outliers.")
+    st.plotly_chart(create_histogram(stock_pca), use_container_width=True)
+
+with tab3:
+    st.markdown("**Pairwise scatter of all PC dimensions** — diagonal shows individual distributions; off-diagonal shows cross-component clustering.")
+    st.plotly_chart(create_pairplot(stock_pca, show_3d=show_3d), use_container_width=True)
+
+with tab4:
+    st.markdown("**Daily-return correlations between stocks** — blue cells = stocks that move together; red = stocks that move oppositely. This is the raw signal PCA compresses.")
+    st.plotly_chart(create_heatmap(returns), use_container_width=True)
